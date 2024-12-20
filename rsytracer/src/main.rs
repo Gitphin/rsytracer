@@ -1,44 +1,50 @@
 use rayon::prelude::*;
 use std::io::{self, Write};
 
-mod vec3;
+mod camera;
 mod color;
+mod common;
+mod hittable;
+mod hittable_list;
 mod ray;
+mod sphere;
+mod vec3;
 
+use camera::Camera;
 use color::Color;
+use hittable::{HitRecord, Hittable};
+use hittable_list::HittableList;
 use ray::Ray;
-use vec3::{Point3, Vec3};
- 
-fn hit_sphere(center: Point3, radius: f64, r: &Ray) -> bool {
-    let oc = r.origin() - center;
-    let dir = r.direction();
-    let a = vec3::dot_product(dir, dir);
-    let b = 2.0 * vec3::dot_product(oc, dir);
-    let c = vec3::dot_product(oc, oc) - radius * radius;
-    let discriminant = b * b - 4.0 * a * c;
-    discriminant >= 0.0
-}
+use sphere::Sphere;
+use vec3::Point3;
+use vec3::Vec3;
 
-fn ray_color(r: &Ray) -> Color {
-    if hit_sphere(Point3::new(0.0, 0.0, -1.0), 0.5, r) {
-        return Color::new(1.0, 0.0, 0.0);
+fn ray_color(r: &Ray, world: &dyn Hittable) -> Result<Color, ()> {
+    let mut rec = HitRecord::new();
+    if world.hit(r, 0.0, common::INFINITY, &mut rec) {
+        return Ok(0.5 * (rec.normal + Color::new(1.0, 1.0, 1.0)));
+    } else {
+        Err(())
     }
-    let unit_direction = vec3::unit_vector(r.direction());
-    let t = 0.5 * (unit_direction.y + 1.0);
-    (1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)
 }
-
 
 fn main() {
     // IMG DIMENSIONS
     const ASPECT_RATIO: f64 = 16.0 / 9.0;
     const IMG_W: i32 = 400;
     const IMG_H: i32 = (IMG_W as f64 / ASPECT_RATIO) as i32;
+    const SAMPLES_PER_PIXEL: i32 = 100;
+
+    let mut world = HittableList::new();
+    world.add(Box::new(Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5)));
+    world.add(Box::new(Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0)));
+
+    let cam = Camera::new();
 
     let viewport_height = 2.0;
     let viewport_width = ASPECT_RATIO * viewport_height;
     let focal_length = 1.0;
- 
+
     let origin = Point3::new(0.0, 0.0, 0.0);
     let horizontal = Vec3::new(viewport_width, 0.0, 0.0);
     let vertical = Vec3::new(0.0, viewport_height, 0.0);
@@ -55,19 +61,23 @@ fn main() {
 
     // PARALLELIZE OUR ITERATION, MAP J TO OUR ROWS
     let rows: Vec<String> = (0..IMG_H)
-        .into_par_iter() 
+        .into_par_iter()
         .rev()
         .map(|j| {
             let mut row = String::new();
             for i in 0..IMG_W {
-            let u = i as f64 / img_w_minus_1;
-            let v = j as f64 / img_h_minus_1;
-            let r = Ray::new(
-                origin,
-                lleft_corner + u * horizontal + v * vertical - origin,
-            );
-            let pixel_color = ray_color(&r);
-            let output = color::write_color(pixel_color);
+                let mut pixel_color = Color::new(0.0, 0.0, 0.0);
+                for _ in 0..SAMPLES_PER_PIXEL {
+                    let u = (i as f64 + common::random_double()) / (img_w_minus_1) as f64;
+                    let v = (j as f64 + common::random_double()) / (img_h_minus_1) as f64;
+                    let r = cam.get_ray(u, v);
+                    let v = ray_color(&r, &world);
+                    match v {
+                        Ok(v) => pixel_color += v,
+                        Err(_) => ()
+                    }
+                }
+                let output = color::write_color(pixel_color, SAMPLES_PER_PIXEL);
                 row.push_str(&output);
             }
             row
@@ -80,4 +90,3 @@ fn main() {
 
     eprintln!("\nPPM Image Completed.");
 }
-

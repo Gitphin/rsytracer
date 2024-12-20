@@ -34,6 +34,10 @@ impl Vec3 {
         *self / self.length()
     }
 
+    pub fn len_squared(&self) -> f64 {
+        self.x * self.x + self.y * self.y + self.z * self.z 
+    }
+
 }
  
 impl Display for Vec3 {
