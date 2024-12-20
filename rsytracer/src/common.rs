@@ -3,7 +3,9 @@ use rand::Rng;
 pub use std::f64::consts::PI;
 pub use std::f64::INFINITY;
  
- 
+/// COMMONLY USED FUNCTIONS WHICH ARE BASIC
+/// ENOUGH TO THE POINT I DONT NEED TO GET
+/// A CRATE FOR THEM
 
 pub fn degrees_to_radians(degrees: f64) -> f64 {
     degrees * PI / 180.0
